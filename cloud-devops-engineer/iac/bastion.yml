@@ -1,0 +1,29 @@
+Parameters:
+  ImageId:
+    Type: String
+    Default: add-your-value-here
+    
+Resources:
+
+  BastionSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId:
+        Fn::ImportValue:
+          !Sub "${EnvironmentName}-VPCID"      
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+
+  BastionInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanteType: t2.micro
+      ImageId: !Ref ImageId
+      SubnetId: 
+      - Fn::ImportValue: 
+          !Sub "${EnvironmentName}-PUB1-SN"
+      SecurityGroupIds: 
+      - BastionSecurityGroup
