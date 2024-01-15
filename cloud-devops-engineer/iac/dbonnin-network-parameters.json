@@ -1,0 +1,14 @@
+[
+    {
+        "ParameterKey": "EnvironmentName",
+        "ParameterValue": "dbonniniacproject"
+    },
+    {
+        "ParameterKey": "VpcCIDR",
+        "ParameterValue": "192.0.0.0/16"
+    },
+    {
+        "ParameterKey": "PublicSubnet1CIDR",
+        "ParameterValue": "192.0.0.0/24"
+    }
+]
