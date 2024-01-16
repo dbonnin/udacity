@@ -1,0 +1,10 @@
+[
+    {
+        "ParameterKey": "EnvironmentName",
+        "ParameterValue": "dbonniniacproject"
+    },  
+    {
+        "ParameterKey": "ImageId",
+        "ParameterValue": ""
+    }
+]
