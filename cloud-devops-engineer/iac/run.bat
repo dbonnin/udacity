@@ -8,7 +8,7 @@ set PARMS_NAME=%4
 set REGION=%5
 
 if "%ACTION%"=="deploy" (
-    aws cloudformation deploy --stack-name %STACK_NAME% --template-file %TEMPLATE_NAME% --parameter-overrides (type %PARMS_NAME%) --region=%REGION% --profile udacity
+    aws cloudformation deploy --template-file dbonnin-servers.yml --stack-name dbonnin-stack --parameter-overrides file://dbonnin-servers-parameters.json --profile udacity
 ) else if "%ACTION%"=="delete" (
     aws cloudformation delete-stack ^
     --stack-name %STACK_NAME% ^
