@@ -43,19 +43,21 @@ Resources:
         !Sub "web-servers-template"
       LaunchTemplateData:
         UserData:
-          echo "Hello, I'm a server ready to work"
+          Fn::Base64: !Sub |
+            #!/bin/bash 
+            echo "Hello, I'm a server ready to work"
         ImageId: ami-0557a15b87f6559cf
         SecurityGroupIds:
         - !Ref WebServerSecurityGroup
-        InstanteType: t2.micro
+        InstanceType: t2.micro
         IamInstanceProfile:
           Name: !Ref WebServerInstanceProfile
-        BlockDeviceMapping:
+        BlockDeviceMappings:
         - DeviceName: "/dev/sdk"
           Ebs:
             VolumeSize: 50
 
-#IAM EC2 Profile
+# #IAM EC2 Profile
   WebServerInstanceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -114,7 +116,7 @@ Resources:
     Properties:
       VPCZoneIdentifier:
       - Fn::ImportValue:
-          !Sub "${EnvironmentName}-PUB1-SN"
+          !Sub "${EnvironmentName}-PUB-NETS"
       LaunchTemplate:
         LaunchTemplateId: !Ref WebAppLaunchTemplate
         Version: !GetAtt WebAppLaunchTemplate.LatestVersionNumber
@@ -143,8 +145,8 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
       Subnets:
-      - Fn::ImportValue:
-          !Sub "${EnvironmentName}-PUB1-SN"
+      - Fn::ImportValue: !Sub "${EnvironmentName}-PUB1-SN"
+      - Fn::ImportValue: !Sub "${EnvironmentName}-PUB2-SN"
       SecurityGroups:
       - !Ref LoadBalancerSecurityGroup
 
