@@ -20,26 +20,35 @@ echo %PROFILE%
 
 
 if "%ACTION%"=="deploy" (
+
     aws cloudformation deploy --stack-name %STACK_NAME% ^
      --template-file %TEMPLATE_NAME% --parameter-overrides file://%PARMS_NAME% --region=%REGION% --profile %PROFILE% --capabilities CAPABILITY_NAMED_IAM
+
 ) else if "%ACTION%"=="preview" (
+
     aws cloudformation deploy --stack-name %STACK_NAME% ^
      --template-file %TEMPLATE_NAME% --parameter-overrides file://%PARMS_NAME% --region=%REGION% --profile %PROFILE% --capabilities CAPABILITY_NAMED_IAM --no-execute-changeset
+
 ) else if "%ACTION%"=="delete" (
-    aws cloudformation delete-stack ^
-    --stack-name %STACK_NAME% ^
-    --region=%REGION%
+
+    aws cloudformation delete-stack --stack-name %STACK_NAME% --region=%REGION% --profile %PROFILE%
+
 ) else if "%ACTION%"=="describe" (
-    aws cloudformation describe-stacks ^
-    --stack-name %STACK_NAME% ^
-    --region=%REGION%
+
+    aws cloudformation describe-stacks --stack-name %STACK_NAME% --region=%REGION% --profile %PROFILE%
+
 ) else if "%ACTION%"=="list" (
-    aws cloudformation list-stacks
+
+    aws cloudformation list-stacks  --stack-name %STACK_NAME% --region=%REGION% --profile %PROFILE%
+
 ) else if "%ACTION%"=="validate" (
-    aws cloudformation validate-template ^
-    --template-body file://%TEMPLATE_NAME% --region=%REGION%
+
+    aws cloudformation validate-template --template-body file://%TEMPLATE_NAME% --region=%REGION%  --region=%REGION% --profile %PROFILE%
+
 ) else if "%ACTION%"=="get_error" (
+
     aws cloudformation describe-stack-events --stack-name %STACK_NAME% --region=%REGION% --profile %PROFILE%
+    
 ) else (
     echo "Invalid action"
 )

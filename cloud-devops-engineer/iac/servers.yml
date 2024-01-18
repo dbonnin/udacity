@@ -1,17 +1,14 @@
 Parameters:
 
   EnvironmentName:
+    Description: An environment name that will be prefixed to resource names
     Type: String
-    Description: Environment prefix
 
 Resources:
-
-#Security groups
-
-  LoadBalancerSecurityGroup:
+  LBSecGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Load Balancer Security Group, allow http access
+      GroupDescription: Allow http access to our load balancer
       VpcId:
         Fn::ImportValue:
           !Sub "${EnvironmentName}-VPCID"
@@ -20,11 +17,11 @@ Resources:
         FromPort: 80
         ToPort: 80
         CidrIp: 0.0.0.0/0
-  
-  WebServerSecurityGroup:
+
+  WebServerSecGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Web Server Security Group, allow http access
+      GroupDescription: Allow http access to our hosts from the LB Security Group
       VpcId:
         Fn::ImportValue:
           !Sub "${EnvironmentName}-VPCID"
@@ -32,13 +29,16 @@ Resources:
       - IpProtocol: tcp
         FromPort: 80
         ToPort: 80
-        SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
-
-#Launch Template for the Web Servers
+        SourceSecurityGroupId: !Ref LBSecGroup
+      SecurityGroupEgress:
+      - IpProtocol: tcp
+        FromPort: 0
+        ToPort: 65535
+        CidrIp: 0.0.0.0/0
 
   WebAppLaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
-    Properties:
+    Properties: 
       LaunchTemplateName: !Sub "${EnvironmentName}-web-servers"
       LaunchTemplateData:
         UserData:
@@ -49,21 +49,19 @@ Resources:
             sudo service nginx start
         ImageId: ami-0557a15b87f6559cf
         SecurityGroupIds:
-          - !Ref WebServerSecurityGroup
-        InstanceType: t3.small
+          - !Ref WebServerSecGroup
+        InstanceType: t2.micro
         BlockDeviceMappings:
         - DeviceName: "/dev/sdk"
           Ebs:
-            VolumeSize: 10
+            VolumeSize: '10'
         IamInstanceProfile:
-          Name: !Ref WebServerInstanceProfile
+          Name: !Ref WebAppInstanceProfile
 
-
-# #IAM EC2 Profile
-  WebServerInstanceRole:
+  WebAppInstanceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "${EnvironmentName}-web-servers-role"
+      RoleName: !Sub "${EnvironmentName}-web-servers"
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -80,20 +78,18 @@ Resources:
             Statement:
             - Effect: Allow
               Action:
-              - 's3:PutObject*'
-              - 's3:GetObject*'
-              - 's3:DeleteObject*'
+              - 's3:GetObject'
               Resource:
-               - !Sub "arn:aws:s3:::dbonnin-web-servers-bucket/*"
+                - !Sub "arn:aws:s3:::any-bucket-name/*"
 
-  WebServerInstanceProfile:
-   Type: AWS::IAM::InstanceProfile
-   Properties:
-     Path: '/'
-     Roles: 
-     - !Ref WebServerInstanceRole
+  WebAppInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: '/'
+      Roles:
+      - !Ref WebAppInstanceRole
 
-  WebAppAutoscalingGroup:
+  WebAppGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       VPCZoneIdentifier:
@@ -102,11 +98,11 @@ Resources:
       LaunchTemplate:
         LaunchTemplateId: !Ref WebAppLaunchTemplate
         Version: !GetAtt WebAppLaunchTemplate.LatestVersionNumber
-      MinSize: 1
-      DesiredCapacity: 1
-      MaxSize: 4
+      MinSize: '1'
+      DesiredCapacity: '1'
+      MaxSize: '3'
       TargetGroupARNs:
-      - !Ref WebAppTargetGroup    
+      - Ref: WebAppTargetGroup
 
   WebAppLB:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
@@ -115,7 +111,7 @@ Resources:
       - Fn::ImportValue: !Sub "${EnvironmentName}-PUB1-SN"
       - Fn::ImportValue: !Sub "${EnvironmentName}-PUB2-SN"
       SecurityGroups:
-      - !Ref LoadBalancerSecurityGroup
+      - Ref: LBSecGroup
 
   Listener:
     Type: AWS::ElasticLoadBalancingV2::Listener
@@ -126,62 +122,38 @@ Resources:
           Ref: WebAppTargetGroup
       LoadBalancerArn:
         Ref: WebAppLB
-      Port: 80
-      Protocol: HTTP      
+      Port: '80'
+      Protocol: HTTP
 
-
-  ListenerRule:
-    Type: AWS::ElasticLoadBalancingV2::ListenerRule
-    Properties:
-      Actions: 
-      - Type: forward
-        TargetGroupArn: !Ref: WebAppTargetGroup
-      Conditions:
-      - Field: path-pattern
-        Values: [/]
-      ListenerArn: !Ref: Listener
-      Priority: 1      
+  ALBListenerRule:
+      Type: AWS::ElasticLoadBalancingV2::ListenerRule
+      Properties:
+        Actions:
+        - Type: forward
+          TargetGroupArn: !Ref 'WebAppTargetGroup'
+        Conditions:
+        - Field: path-pattern
+          Values: [/]
+        ListenerArn: !Ref 'Listener'
+        Priority: 1
 
   WebAppTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      HealthCheckIntervalSeconds: 20
+      HealthCheckIntervalSeconds: 10
       HealthCheckPath: /
       HealthCheckProtocol: HTTP
-      HealthCheckTimeoutSeconds: 10
-      HealthyThresholdCount: 3
+      HealthCheckTimeoutSeconds: 8
+      HealthyThresholdCount: 2
       Port: 80
       Protocol: HTTP
       UnhealthyThresholdCount: 5
-      VpcId:
+      VpcId: 
         Fn::ImportValue:
-          !Sub "${EnvironmentName}-VPCID"       
-
-  S3Bucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub "dbonnin-web-servers-bucket"
-      VersioningConfiguration:
-        Status: Enabled
-      LifecycleConfiguration:
-        Rules:
-          - Status: "Enabled"
-            NoncurrentVersionExpirationInDays: 10
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-
-
+          Fn::Sub: "${EnvironmentName}-VPCID"
 
 Outputs:
 
   LoadBalancerDNSName:
     Description: The DNS name of the Load Balancer
-    Value: !GetAtt WebAppLB.DNSName      
-
+    Value: !GetAtt WebAppLB.DNSName               
