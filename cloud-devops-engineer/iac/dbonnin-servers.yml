@@ -177,11 +177,28 @@ Resources:
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
 
-
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Origins:
+          - Id: WebAppLB
+            CustomOriginConfig:
+              HTTPPort: 80
+              HTTPSPort: 443
+              OriginProtocolPolicy: https-only
+        DefaultCacheBehavior:
+          TargetOriginId: WebAppLB
+          ViewerProtocolPolicy: redirect-to-https
+        Enabled: true        
 
 Outputs:
 
   LoadBalancerDNSName:
     Description: The DNS name of the Load Balancer
     Value: !GetAtt WebAppLB.DNSName      
+
+  CloudFrontDistributionDomainName:
+    Description: Domain name of the CloudFront distribution
+    Value: !GetAtt CloudFrontDistribution.DomainName    
 
