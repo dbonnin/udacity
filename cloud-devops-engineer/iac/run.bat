@@ -30,9 +30,7 @@ if "%ACTION%"=="deploy" (
     --stack-name %STACK_NAME% ^
     --region=%REGION%
 ) else if "%ACTION%"=="describe" (
-    aws cloudformation describe-stacks ^
-    --stack-name %STACK_NAME% ^
-    --region=%REGION%
+    aws cloudformation describe-stacks --stack-name %STACK_NAME% --region=%REGION% --profile %PROFILE%
 ) else if "%ACTION%"=="list" (
     aws cloudformation list-stacks
 ) else if "%ACTION%"=="validate" (
