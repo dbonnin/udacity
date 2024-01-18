@@ -39,29 +39,31 @@ Resources:
   WebAppLaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
-      LaunchTemplateName:
-        !Sub "web-servers-template"
+      LaunchTemplateName: !Sub "${EnvironmentName}-web-servers"
       LaunchTemplateData:
         UserData:
           Fn::Base64: !Sub |
-            #!/bin/bash 
-            echo "Hello, I'm a server ready to work"
+            #!/bin/bash
+            sudo apt-get update -y
+            sudo apt-get install nginx -y
+            sudo service nginx start
         ImageId: ami-0557a15b87f6559cf
         SecurityGroupIds:
-        - !Ref WebServerSecurityGroup
-        InstanceType: t2.micro
-        IamInstanceProfile:
-          Name: !Ref WebServerInstanceProfile
+          - !Ref WebServerSecurityGroup
+        InstanceType: t3.small
         BlockDeviceMappings:
         - DeviceName: "/dev/sdk"
           Ebs:
-            VolumeSize: 50
+            VolumeSize: 10
+        IamInstanceProfile:
+          Name: !Ref WebServerInstanceProfile
+
 
 # #IAM EC2 Profile
   WebServerInstanceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: web-servers-instance-role
+      RoleName: !Sub "${EnvironmentName}-web-servers-role"
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -91,55 +93,20 @@ Resources:
      Roles: 
      - !Ref WebServerInstanceRole
 
-  S3Bucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub "dbonnin-web-servers-bucket"
-      VersioningConfiguration:
-        Status: Enabled
-      LifecycleConfiguration:
-        Rules:
-          - Status: "Enabled"
-            NoncurrentVersionExpirationInDays: 10
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-
   WebAppAutoscalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       VPCZoneIdentifier:
-      - Fn::ImportValue:
-          !Sub "${EnvironmentName}-PUB-NETS"
+      - Fn::ImportValue: 
+          !Sub "${EnvironmentName}-PRIV-NETS"
       LaunchTemplate:
         LaunchTemplateId: !Ref WebAppLaunchTemplate
         Version: !GetAtt WebAppLaunchTemplate.LatestVersionNumber
-      MinSize: 2
-      DesiredCapacity: 2
+      MinSize: 1
+      DesiredCapacity: 1
       MaxSize: 4
       TargetGroupARNs:
-      - !Ref WebAppTargetGroup
-
-  WebAppTargetGroup:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Properties:
-      HealthCheckIntervalSeconds: 30
-      HealthCheckPath: /
-      HealthCheckProtocol: HTTP
-      HealthCheckTimeoutSeconds: 10
-      HealthyThresholdCount: 3
-      Port: 80
-      Protocol: HTTP
-      UnhealthyThresholdCount: 3
-      VpcId:
-        Fn::ImportValue:
-          !Sub "${EnvironmentName}-VPCID"
+      - !Ref WebAppTargetGroup    
 
   WebAppLB:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
@@ -160,19 +127,78 @@ Resources:
       LoadBalancerArn:
         Ref: WebAppLB
       Port: 80
-      Protocol: HTTP
+      Protocol: HTTP      
+
 
   ListenerRule:
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
     Properties:
       Actions: 
       - Type: forward
-        TargetGroupArn:
-          Ref: WebAppTargetGroup
+        TargetGroupArn: !Ref: WebAppTargetGroup
       Conditions:
       - Field: path-pattern
         Values: [/]
-      ListenerArn:
-        Ref: Listener
-      Priority: 1
+      ListenerArn: !Ref: Listener
+      Priority: 1      
+
+  WebAppTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 20
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 3
+      Port: 80
+      Protocol: HTTP
+      UnhealthyThresholdCount: 5
+      VpcId:
+        Fn::ImportValue:
+          !Sub "${EnvironmentName}-VPCID"       
+
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "dbonnin-web-servers-bucket"
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Status: "Enabled"
+            NoncurrentVersionExpirationInDays: 10
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Origins:
+          - Id: WebAppLB
+            CustomOriginConfig:
+              HTTPPort: 80
+              HTTPSPort: 443
+              OriginProtocolPolicy: https-only
+        DefaultCacheBehavior:
+          TargetOriginId: WebAppLB
+          ViewerProtocolPolicy: redirect-to-https
+        Enabled: true        
+
+Outputs:
+
+  LoadBalancerDNSName:
+    Description: The DNS name of the Load Balancer
+    Value: !GetAtt WebAppLB.DNSName      
+
+  CloudFrontDistributionDomainName:
+    Description: Domain name of the CloudFront distribution
+    Value: !GetAtt CloudFrontDistribution.DomainName    
 
