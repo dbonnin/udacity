@@ -134,12 +134,12 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
     Properties:
       Actions: 
-      - Type: forward
-        TargetGroupArn: !Ref: WebAppTargetGroup
+      - Type: forward 
+        TargetGroupArn: !Ref WebAppTargetGroup
       Conditions:
       - Field: path-pattern
         Values: [/]
-      ListenerArn: !Ref: Listener
+      ListenerArn: !Ref Listener
       Priority: 1      
 
   WebAppTargetGroup:
@@ -160,7 +160,12 @@ Resources:
   S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "dbonnin-web-servers-bucket"
+      BucketName: dbonnin-web-servers-bucket
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false      
       VersioningConfiguration:
         Status: Enabled
       LifecycleConfiguration:
@@ -171,18 +176,33 @@ Resources:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
 
+  S3BucketPolicy:
+    Type: 'AWS::S3::BucketPolicy'
+    Properties:
+      Bucket:
+        Ref: 'S3Bucket'
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action: 's3:GetObject'
+            Resource:
+              Fn::Join:
+                - ''
+                - - 'arn:aws:s3:::'
+                  - Ref: 'S3Bucket'
+                  - '/*'
+
+        
   CloudFrontDistribution:
     Type: AWS::CloudFront::Distribution
     Properties:
       DistributionConfig:
         Origins:
           - Id: WebAppLB
+            DomainName: !GetAtt WebAppLB.DNSName
             CustomOriginConfig:
               HTTPPort: 80
               HTTPSPort: 443
@@ -190,7 +210,29 @@ Resources:
         DefaultCacheBehavior:
           TargetOriginId: WebAppLB
           ViewerProtocolPolicy: redirect-to-https
-        Enabled: true        
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: none
+        Enabled: true     
+
+  StaticContentCloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Origins:
+          - Id: S3BucketOrigin
+            DomainName: !GetAtt S3Bucket.DomainName
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+        DefaultCacheBehavior:
+          TargetOriginId: S3BucketOrigin
+          ViewerProtocolPolicy: allow-all
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: none
+        Enabled: true           
 
 Outputs:
 
@@ -200,5 +242,11 @@ Outputs:
 
   CloudFrontDistributionDomainName:
     Description: Domain name of the CloudFront distribution
-    Value: !GetAtt CloudFrontDistribution.DomainName    
+    Value: !GetAtt CloudFrontDistribution.DomainName
+
+  StaticContentCloudFrontDistribution:
+    Description: Domain name of the CloudFront distribution
+    Value: !GetAtt StaticContentCloudFrontDistribution.DomainName
+
+
 
